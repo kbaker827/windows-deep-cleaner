@@ -44,7 +44,17 @@ Remove unwanted and unnecessary files to free up disk space. Supports both per-u
 
 ## 💻 Installation
 
-### Option 1: Direct Download
+### Option 1: Download Pre-built Executable ⭐ Recommended
+
+**The easiest way - no Python required!**
+
+1. Go to [Actions → Build Windows Executable](https://github.com/kbaker827/windows-deep-cleaner/actions/workflows/build-exe.yml)
+2. Click on the latest successful build
+3. Scroll down to "Artifacts" section
+4. Download `WindowsDeepCleaner-exe`
+5. Extract and run `WindowsDeepCleaner.exe`
+
+### Option 2: Clone and Run with Python
 
 ```bash
 # Clone repository
@@ -55,14 +65,14 @@ cd windows-deep-cleaner
 python main.py
 ```
 
-### Option 2: Create Executable
+### Option 3: Build Your Own Executable
 
 ```bash
 # Install PyInstaller
 pip install pyinstaller
 
 # Create standalone executable
-pyinstaller --onefile --windowed --name "WindowsDeepCleaner" main.py
+pyinstaller WindowsDeepCleaner.spec
 
 # Find executable in dist/ folder
 ```
@@ -266,11 +276,13 @@ MIT License - See LICENSE file
 
 ## 📦 Building Executable
 
-### Option 1: Automatic (GitHub Actions)
+### Option 1: Download Pre-built (Recommended)
 
-The executable is automatically built on every release:
-1. Go to the [Releases](https://github.com/kbaker827/windows-deep-cleaner/releases) page
-2. Download `WindowsDeepCleaner.exe` from the latest release
+**Download from GitHub Actions:**
+1. Go to [Actions → Build Windows Executable](https://github.com/kbaker827/windows-deep-cleaner/actions/workflows/build-exe.yml)
+2. Click the latest successful build
+3. Download artifact `WindowsDeepCleaner-exe`
+4. Extract and run
 
 ### Option 2: Build on Windows
 
@@ -286,21 +298,14 @@ build_exe.bat
 
 # Or manually:
 pip install pyinstaller
-pyinstaller --onefile --windowed --name "WindowsDeepCleaner" main.py
+pyinstaller WindowsDeepCleaner.spec
 
 # Find executable in dist/ folder
 ```
 
 ### Option 3: Build with GitHub Actions
 
-Fork the repository and push a tag to trigger automatic build:
-
-```bash
-git tag v1.0.0
-git push origin v1.0.0
-```
-
-The executable will be available in the Release assets.
+Fork the repository - builds happen automatically on every push to main.
 
 ## 🚀 Running the Executable
 

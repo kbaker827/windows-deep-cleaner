@@ -44,5 +44,14 @@ jobs:
         files: dist/WindowsDeepCleaner.exe
         draft: false
         prerelease: false
+        fail_on_unmatched_files: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      continue-on-error: true
+    
+    - name: Summary
+      if: always()
+      run: |
+        echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
+        echo "- Executable: dist/WindowsDeepCleaner.exe" >> $GITHUB_STEP_SUMMARY
+        echo "- Download: Go to Actions -> Build Windows Executable -> Artifacts" >> $GITHUB_STEP_SUMMARY
