@@ -41,8 +41,8 @@ class CleanerGUI:
         
         self.root = tk.Tk()
         self.root.title("Windows Deep Cleaner")
-        self.root.geometry("1000x800")
-        self.root.minsize(900, 700)
+        self.root.geometry("1000x850")
+        self.root.minsize(900, 750)
         
         # Set Windows DPI awareness
         if platform.system() == 'Windows':
@@ -56,8 +56,8 @@ class CleanerGUI:
         
     def setup_ui(self):
         """Setup the user interface"""
-        # Main container
-        main_frame = ttk.Frame(self.root, padding="15")
+        # Main container - reduced padding
+        main_frame = ttk.Frame(self.root, padding="10")
         main_frame.pack(fill=tk.BOTH, expand=True)
         
         # Header
@@ -66,7 +66,7 @@ class CleanerGUI:
         # Mode selection
         self._create_mode_section(main_frame)
         
-        # Categories
+        # Categories - compact
         self._create_categories_section(main_frame)
         
         # Actions
@@ -75,19 +75,19 @@ class CleanerGUI:
         # Progress
         self._create_progress_section(main_frame)
         
-        # Results
+        # Results - takes remaining space
         self._create_results_section(main_frame)
         
     def _create_header(self, parent):
         """Create header section"""
         header = ttk.Frame(parent)
-        header.pack(fill=tk.X, pady=(0, 10))
+        header.pack(fill=tk.X, pady=(0, 5))
         
         # Title
         title = ttk.Label(
             header,
             text="🧹 Windows Deep Cleaner",
-            font=('Segoe UI', 18, 'bold')
+            font=('Segoe UI', 16, 'bold')
         )
         title.pack(anchor=tk.W)
         
@@ -95,7 +95,7 @@ class CleanerGUI:
         subtitle = ttk.Label(
             header,
             text="Remove unwanted and unnecessary files to free up disk space",
-            font=('Segoe UI', 10)
+            font=('Segoe UI', 9)
         )
         subtitle.pack(anchor=tk.W)
         
@@ -104,39 +104,32 @@ class CleanerGUI:
             status_text = "✅ Administrator Mode"
             status_color = 'green'
         else:
-            status_text = "ℹ️  Standard User Mode (Machine-wide requires elevation)"
+            status_text = "ℹ️  Standard User Mode"
             status_color = 'orange'
             
         status = ttk.Label(
             header,
             text=status_text,
-            font=('Segoe UI', 9, 'bold'),
+            font=('Segoe UI', 8, 'bold'),
             foreground=status_color
         )
-        status.pack(anchor=tk.W, pady=(5, 0))
+        status.pack(anchor=tk.W)
         
-        ttk.Separator(parent, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
+        ttk.Separator(parent, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=5)
         
     def _create_mode_section(self, parent):
         """Create mode selection section"""
-        mode_frame = ttk.LabelFrame(parent, text="Cleaning Mode", padding="10")
-        mode_frame.pack(fill=tk.X, pady=(0, 10))
+        mode_frame = ttk.LabelFrame(parent, text="Cleaning Mode", padding="5")
+        mode_frame.pack(fill=tk.X, pady=(0, 5))
         
         self.mode_var = tk.StringVar(value='user')
         
         ttk.Radiobutton(
             mode_frame,
-            text="👤 Per-User (Current User Only)",
+            text="👤 Per-User (Current User)",
             variable=self.mode_var,
             value='user',
             command=self._on_mode_change
-        ).pack(anchor=tk.W)
-        
-        ttk.Label(
-            mode_frame,
-            text="    Cleans: Temp files, browser cache, Recycle Bin, user logs",
-            font=('Segoe UI', 8),
-            foreground='gray'
         ).pack(anchor=tk.W)
         
         ttk.Radiobutton(
@@ -145,59 +138,46 @@ class CleanerGUI:
             variable=self.mode_var,
             value='system',
             command=self._on_mode_change
-        ).pack(anchor=tk.W, pady=(10, 0))
-        
-        ttk.Label(
-            mode_frame,
-            text="    Cleans: Windows Update cache, system temp, all user profiles",
-            font=('Segoe UI', 8),
-            foreground='gray'
         ).pack(anchor=tk.W)
-        
-        if not self.admin:
-            ttk.Label(
-                mode_frame,
-                text="⚠️  You need to run as Administrator for Machine-Wide mode",
-                font=('Segoe UI', 9, 'bold'),
-                foreground='red'
-            ).pack(anchor=tk.W, pady=(10, 0))
             
     def _create_categories_section(self, parent):
-        """Create cleaning categories section"""
-        cat_frame = ttk.LabelFrame(parent, text="Categories to Clean", padding="10")
-        cat_frame.pack(fill=tk.X, pady=(0, 10))
+        """Create cleaning categories section - compact 2-column layout"""
+        cat_frame = ttk.LabelFrame(parent, text="Categories to Clean", padding="5")
+        cat_frame.pack(fill=tk.X, pady=(0, 5))
+        
+        # Create 2-column layout
+        left_frame = ttk.Frame(cat_frame)
+        left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        right_frame = ttk.Frame(cat_frame)
+        right_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         
         # Create checkboxes for categories
         self.category_vars = {}
         self.category_size_labels = {}
         
         categories = [
-            ('temp_files', '📁 Temporary Files', 'Windows and user temp directories'),
-            ('browser_cache', '🌐 Browser Cache', 'Chrome, Firefox, Edge cache files'),
-            ('windows_update', '🔄 Windows Update Cache', 'Old Windows Update files'),
-            ('recycle_bin', '🗑️  Recycle Bin', 'Deleted files in Recycle Bin'),
-            ('thumbnails', '🖼️  Thumbnail Cache', 'Windows Explorer thumbnail cache'),
-            ('crash_dumps', '💥 Crash Dumps', 'Application crash dump files'),
-            ('log_files', '📋 Log Files', 'Application and system logs'),
-            ('downloads', '📥 Downloads Folder', 'Old files in Downloads (optional)'),
+            ('temp_files', '📁 Temporary Files', 'Temp directories'),
+            ('browser_cache', '🌐 Browser Cache', 'Chrome, Firefox, Edge'),
+            ('windows_update', '🔄 Windows Update', 'Old update files'),
+            ('recycle_bin', '🗑️  Recycle Bin', 'Deleted files'),
         ]
         
-        for key, label, description in categories:
-            frame = ttk.Frame(cat_frame)
-            frame.pack(fill=tk.X, pady=2)
+        categories_right = [
+            ('thumbnails', '🖼️  Thumbnails', 'Explorer cache'),
+            ('crash_dumps', '💥 Crash Dumps', 'App crash files'),
+            ('log_files', '📋 Log Files', 'System logs'),
+            ('downloads', '📥 Downloads', 'Download folder'),
+        ]
+        
+        def create_category_row(parent_frame, key, label, description):
+            frame = ttk.Frame(parent_frame)
+            frame.pack(fill=tk.X, pady=1)
             
             var = tk.BooleanVar(value=True)
             self.category_vars[key] = var
             
             cb = ttk.Checkbutton(frame, text=label, variable=var)
             cb.pack(side=tk.LEFT)
-            
-            ttk.Label(
-                frame,
-                text=f"- {description}",
-                font=('Segoe UI', 8),
-                foreground='gray'
-            ).pack(side=tk.LEFT, padx=(5, 0))
             
             # Size label (will be updated after scan)
             size_label = ttk.Label(
@@ -206,13 +186,21 @@ class CleanerGUI:
                 font=('Segoe UI', 8, 'bold'),
                 foreground='green'
             )
-            size_label.pack(side=tk.RIGHT, padx=(10, 0))
+            size_label.pack(side=tk.RIGHT, padx=(5, 0))
             self.category_size_labels[key] = size_label
+        
+        # Left column
+        for key, label, desc in categories:
+            create_category_row(left_frame, key, label, desc)
+        
+        # Right column
+        for key, label, desc in categories_right:
+            create_category_row(right_frame, key, label, desc)
             
     def _create_actions_section(self, parent):
         """Create action buttons section"""
         action_frame = ttk.Frame(parent)
-        action_frame.pack(fill=tk.X, pady=(0, 10))
+        action_frame.pack(fill=tk.X, pady=(0, 5))
         
         # Scan button
         self.scan_btn = tk.Button(
@@ -221,9 +209,9 @@ class CleanerGUI:
             command=self._scan,
             bg='#007bff',
             fg='white',
-            font=('Segoe UI', 11, 'bold'),
-            padx=20,
-            pady=10,
+            font=('Segoe UI', 10, 'bold'),
+            padx=15,
+            pady=5,
             cursor='hand2'
         )
         self.scan_btn.pack(side=tk.LEFT, padx=(0, 10))
@@ -235,9 +223,9 @@ class CleanerGUI:
             command=self._clean,
             bg='#28a745',
             fg='white',
-            font=('Segoe UI', 11, 'bold'),
-            padx=20,
-            pady=10,
+            font=('Segoe UI', 10, 'bold'),
+            padx=15,
+            pady=5,
             cursor='hand2',
             state=tk.DISABLED
         )
@@ -247,14 +235,14 @@ class CleanerGUI:
         self.dry_run_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(
             action_frame,
-            text="Dry Run (Preview Only)",
+            text="Dry Run",
             variable=self.dry_run_var
-        ).pack(side=tk.LEFT, padx=20)
+        ).pack(side=tk.LEFT, padx=10)
         
     def _create_progress_section(self, parent):
         """Create progress section"""
-        progress_frame = ttk.LabelFrame(parent, text="Progress", padding="10")
-        progress_frame.pack(fill=tk.X, pady=(0, 10))
+        progress_frame = ttk.LabelFrame(parent, text="Progress", padding="5")
+        progress_frame.pack(fill=tk.X, pady=(0, 5))
         
         # Progress bar
         self.progress_var = tk.DoubleVar(value=0)
@@ -264,47 +252,41 @@ class CleanerGUI:
             maximum=100,
             mode='determinate'
         )
-        self.progress.pack(fill=tk.X, pady=(0, 5))
+        self.progress.pack(fill=tk.X)
         
         # Status label
         self.status_var = tk.StringVar(value="Ready to scan")
-        ttk.Label(progress_frame, textvariable=self.status_var).pack(anchor=tk.W)
+        ttk.Label(progress_frame, textvariable=self.status_var, font=('Segoe UI', 8)).pack(anchor=tk.W)
         
     def _create_results_section(self, parent):
-        """Create results section - prominently displayed"""
-        results_frame = ttk.LabelFrame(parent, text="📊 Scan Results & Log", padding="10")
-        results_frame.pack(fill=tk.BOTH, expand=True, pady=(10, 0))
+        """Create results section - compact but visible"""
+        results_frame = ttk.LabelFrame(parent, text="📊 Results", padding="5")
+        results_frame.pack(fill=tk.BOTH, expand=True)
         
-        # Results text with larger minimum height
+        # Summary label at TOP (most important - always visible)
+        self.summary_var = tk.StringVar(value="👉 Click '🔍 Scan' to see what can be cleaned")
+        self.summary_label = ttk.Label(
+            results_frame,
+            textvariable=self.summary_var,
+            font=('Segoe UI', 10, 'bold'),
+            foreground='#007bff'
+        )
+        self.summary_label.pack(anchor=tk.W, pady=(0, 5))
+        
+        # Results text - compact height
         self.results_text = scrolledtext.ScrolledText(
             results_frame,
             wrap=tk.WORD,
-            font=('Consolas', 10),
-            height=15,
+            font=('Consolas', 9),
+            height=10,
             bg='#f5f5f5'
         )
         self.results_text.pack(fill=tk.BOTH, expand=True)
         
         # Add initial welcome text
-        self.results_text.insert(tk.END, "Welcome to Windows Deep Cleaner!\n")
-        self.results_text.insert(tk.END, "="*60 + "\n\n")
-        self.results_text.insert(tk.END, "To get started:\n")
-        self.results_text.insert(tk.END, "1. Select the categories you want to clean above\n")
-        self.results_text.insert(tk.END, "2. Click '🔍 Scan' to see what can be cleaned\n")
-        self.results_text.insert(tk.END, "3. Review the results\n")
-        self.results_text.insert(tk.END, "4. Click '🧹 Clean' to remove the files\n\n")
-        self.results_text.insert(tk.END, "💡 Tip: Use 'Dry Run' first to preview what will be deleted\n")
-        self.results_text.config(state=tk.DISABLED)  # Make read-only initially
-        
-        # Summary label
-        self.summary_var = tk.StringVar(value="Ready to scan - Click '🔍 Scan' to begin")
-        self.summary_label = ttk.Label(
-            results_frame,
-            textvariable=self.summary_var,
-            font=('Segoe UI', 11, 'bold'),
-            foreground='#007bff'
-        )
-        self.summary_label.pack(anchor=tk.W, pady=(10, 0))
+        self.results_text.insert(tk.END, "Welcome! Select categories above and click Scan.\n")
+        self.results_text.insert(tk.END, "💡 Tip: Use 'Dry Run' first to preview deletions.\n")
+        self.results_text.config(state=tk.DISABLED)
         
     def _on_mode_change(self):
         """Handle mode change"""
