@@ -329,9 +329,29 @@ class CleanerGUI:
             results = self.cleaner.scan(categories, mode, self._update_progress)
             self.scan_results = results
             
-            # Display results
+            # Display results in a formatted table
             total_size = 0
             total_files = 0
+            
+            self._log("")
+            self._log("="*60)
+            self._log("📊 SCAN RESULTS - Space to be freed per category:")
+            self._log("="*60)
+            self._log("")
+            self._log(f"{'Category':<25} {'Size':>15} {'Files':>10}")
+            self._log("-"*60)
+            
+            # Category display names
+            category_names = {
+                'temp_files': '📁 Temporary Files',
+                'browser_cache': '🌐 Browser Cache',
+                'windows_update': '🔄 Windows Update',
+                'recycle_bin': '🗑️  Recycle Bin',
+                'thumbnails': '🖼️  Thumbnails',
+                'crash_dumps': '💥 Crash Dumps',
+                'log_files': '📋 Log Files',
+                'downloads': '📥 Downloads'
+            }
             
             for category, data in results.items():
                 size = data.get('size', 0)
@@ -339,10 +359,13 @@ class CleanerGUI:
                 total_size += size
                 total_files += files
                 
-                self._log(f"📁 {category}: {format_bytes(size)} ({files} files)")
+                display_name = category_names.get(category, category)
+                self._log(f"{display_name:<25} {format_bytes(size):>15} {files:>10}")
                 
+            self._log("-"*60)
+            self._log(f"{'TOTAL':<25} {format_bytes(total_size):>15} {total_files:>10}")
+            self._log("="*60)
             self._log("")
-            self._log(f"📊 Total: {format_bytes(total_size)} ({total_files} files)")
             
             self.summary_var.set(f"Scan complete: {format_bytes(total_size)} can be freed")
             self.clean_btn.config(state=tk.NORMAL)
