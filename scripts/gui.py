@@ -41,8 +41,8 @@ class CleanerGUI:
         
         self.root = tk.Tk()
         self.root.title("Windows Deep Cleaner")
-        self.root.geometry("900x700")
-        self.root.minsize(800, 600)
+        self.root.geometry("1000x800")
+        self.root.minsize(900, 700)
         
         # Set Windows DPI awareness
         if platform.system() == 'Windows':
@@ -271,26 +271,40 @@ class CleanerGUI:
         ttk.Label(progress_frame, textvariable=self.status_var).pack(anchor=tk.W)
         
     def _create_results_section(self, parent):
-        """Create results section"""
-        results_frame = ttk.LabelFrame(parent, text="Results", padding="10")
-        results_frame.pack(fill=tk.BOTH, expand=True)
+        """Create results section - prominently displayed"""
+        results_frame = ttk.LabelFrame(parent, text="📊 Scan Results & Log", padding="10")
+        results_frame.pack(fill=tk.BOTH, expand=True, pady=(10, 0))
         
-        # Results text
+        # Results text with larger minimum height
         self.results_text = scrolledtext.ScrolledText(
             results_frame,
             wrap=tk.WORD,
-            font=('Consolas', 9),
-            height=10
+            font=('Consolas', 10),
+            height=15,
+            bg='#f5f5f5'
         )
         self.results_text.pack(fill=tk.BOTH, expand=True)
         
+        # Add initial welcome text
+        self.results_text.insert(tk.END, "Welcome to Windows Deep Cleaner!\n")
+        self.results_text.insert(tk.END, "="*60 + "\n\n")
+        self.results_text.insert(tk.END, "To get started:\n")
+        self.results_text.insert(tk.END, "1. Select the categories you want to clean above\n")
+        self.results_text.insert(tk.END, "2. Click '🔍 Scan' to see what can be cleaned\n")
+        self.results_text.insert(tk.END, "3. Review the results\n")
+        self.results_text.insert(tk.END, "4. Click '🧹 Clean' to remove the files\n\n")
+        self.results_text.insert(tk.END, "💡 Tip: Use 'Dry Run' first to preview what will be deleted\n")
+        self.results_text.config(state=tk.DISABLED)  # Make read-only initially
+        
         # Summary label
-        self.summary_var = tk.StringVar(value="")
-        ttk.Label(
+        self.summary_var = tk.StringVar(value="Ready to scan - Click '🔍 Scan' to begin")
+        self.summary_label = ttk.Label(
             results_frame,
             textvariable=self.summary_var,
-            font=('Segoe UI', 10, 'bold')
-        ).pack(anchor=tk.W, pady=(10, 0))
+            font=('Segoe UI', 11, 'bold'),
+            foreground='#007bff'
+        )
+        self.summary_label.pack(anchor=tk.W, pady=(10, 0))
         
     def _on_mode_change(self):
         """Handle mode change"""
@@ -305,8 +319,10 @@ class CleanerGUI:
             
     def _log(self, message):
         """Add message to results"""
+        self.results_text.config(state=tk.NORMAL)
         self.results_text.insert(tk.END, message + "\n")
         self.results_text.see(tk.END)
+        self.results_text.config(state=tk.DISABLED)
         self.status_var.set(message[:80])
         
     def _scan(self):
@@ -336,6 +352,10 @@ class CleanerGUI:
     def _scan_thread(self, categories, mode):
         """Scan thread"""
         try:
+            # Enable and clear the results text
+            self.results_text.config(state=tk.NORMAL)
+            self.results_text.delete(1.0, tk.END)
+            
             self._log("🔍 Starting scan...")
             self._log(f"   Mode: {mode}")
             self._log(f"   Categories: {', '.join(categories)}")
