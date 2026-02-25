@@ -169,6 +169,7 @@ class CleanerGUI:
         
         # Create checkboxes for categories
         self.category_vars = {}
+        self.category_size_labels = {}
         
         categories = [
             ('temp_files', '📁 Temporary Files', 'Windows and user temp directories'),
@@ -197,6 +198,16 @@ class CleanerGUI:
                 font=('Segoe UI', 8),
                 foreground='gray'
             ).pack(side=tk.LEFT, padx=(5, 0))
+            
+            # Size label (will be updated after scan)
+            size_label = ttk.Label(
+                frame,
+                text="",
+                font=('Segoe UI', 8, 'bold'),
+                foreground='green'
+            )
+            size_label.pack(side=tk.RIGHT, padx=(10, 0))
+            self.category_size_labels[key] = size_label
             
     def _create_actions_section(self, parent):
         """Create action buttons section"""
@@ -305,6 +316,10 @@ class CleanerGUI:
         self.progress_var.set(0)
         self.results_text.delete(1.0, tk.END)
         
+        # Clear previous size labels
+        for label in self.category_size_labels.values():
+            label.config(text="")
+        
         # Get selected categories
         categories = [k for k, v in self.category_vars.items() if v.get()]
         mode = self.mode_var.get()
@@ -361,6 +376,15 @@ class CleanerGUI:
                 
                 display_name = category_names.get(category, category)
                 self._log(f"{display_name:<25} {format_bytes(size):>15} {files:>10}")
+                
+                # Update the category size label in the GUI
+                if category in self.category_size_labels:
+                    if size > 0:
+                        self.category_size_labels[category].config(
+                            text=f"{format_bytes(size)} ({files} files)"
+                        )
+                    else:
+                        self.category_size_labels[category].config(text="")
                 
             self._log("-"*60)
             self._log(f"{'TOTAL':<25} {format_bytes(total_size):>15} {total_files:>10}")
