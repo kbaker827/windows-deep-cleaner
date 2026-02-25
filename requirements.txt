@@ -1,0 +1,5 @@
+# Windows Deep Cleaner Requirements
+# Python 3.7+ required
+
+# No external dependencies - uses only Python standard library
+# tkinter is included with Python on Windows
