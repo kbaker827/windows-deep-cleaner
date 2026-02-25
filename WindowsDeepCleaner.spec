@@ -4,8 +4,9 @@ import sys
 import os
 from pathlib import Path
 
-# Get the base directory (where the spec file is located)
-base_dir = Path(os.path.dirname(os.path.abspath(SPECFILE)))
+# Get the base directory - in PyInstaller spec, use current working directory
+# The spec file is executed from the directory where it's located
+base_dir = Path('.').resolve()
 
 block_cipher = None
 
