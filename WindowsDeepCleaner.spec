@@ -1,10 +1,11 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 import sys
+import os
 from pathlib import Path
 
-# Get the base directory
-base_dir = Path(SPECDIR)
+# Get the base directory (where the spec file is located)
+base_dir = Path(os.path.dirname(os.path.abspath(SPECFILE)))
 
 block_cipher = None
 
