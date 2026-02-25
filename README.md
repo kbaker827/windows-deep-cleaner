@@ -263,3 +263,51 @@ MIT License - See LICENSE file
 ---
 
 **Free up disk space safely! 🧹💾**
+
+## 📦 Building Executable
+
+### Option 1: Automatic (GitHub Actions)
+
+The executable is automatically built on every release:
+1. Go to the [Releases](https://github.com/kbaker827/windows-deep-cleaner/releases) page
+2. Download `WindowsDeepCleaner.exe` from the latest release
+
+### Option 2: Build on Windows
+
+If you have Windows with Python installed:
+
+```batch
+# Clone the repository
+git clone https://github.com/kbaker827/windows-deep-cleaner.git
+cd windows-deep-cleaner
+
+# Run the build script
+build_exe.bat
+
+# Or manually:
+pip install pyinstaller
+pyinstaller --onefile --windowed --name "WindowsDeepCleaner" main.py
+
+# Find executable in dist/ folder
+```
+
+### Option 3: Build with GitHub Actions
+
+Fork the repository and push a tag to trigger automatic build:
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+The executable will be available in the Release assets.
+
+## 🚀 Running the Executable
+
+Simply double-click `WindowsDeepCleaner.exe` - no Python installation required!
+
+### For Machine-Wide Cleaning:
+1. Right-click on `WindowsDeepCleaner.exe`
+2. Select "Run as administrator"
+3. Select "🖥️ Machine-Wide" mode
+
