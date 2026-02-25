@@ -28,7 +28,7 @@ pip install pyinstaller --quiet
 REM Build the executable
 echo.
 echo Building executable...
-pyinstaller --onefile --windowed --name "WindowsDeepCleaner" --clean --add-data "scripts;scripts" main.py
+pyinstaller --clean WindowsDeepCleaner.spec
 
 if errorlevel 1 (
     echo.
