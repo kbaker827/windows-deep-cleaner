@@ -9,9 +9,18 @@ import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext
 import threading
 import platform
+import sys
+from pathlib import Path
 
-from cleaner import WindowsCleaner
-from utils import format_bytes, get_icon
+# Handle imports for both regular Python and PyInstaller
+try:
+    from cleaner import WindowsCleaner
+    from utils import format_bytes, get_icon
+except ImportError:
+    # If running as script, add parent to path
+    sys.path.insert(0, str(Path(__file__).parent))
+    from cleaner import WindowsCleaner
+    from utils import format_bytes, get_icon
 
 
 class CleanerGUI:
