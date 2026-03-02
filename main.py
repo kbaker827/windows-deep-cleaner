@@ -12,210 +12,125 @@ import ctypes
 from pathlib import Path
 import importlib.util
 
-# Determine base path (works for both Python and PyInstaller)
-def get_base_dir():
-    """Get the base directory, handling PyInstaller bundling"""
+
+def get_base_dir() -> Path:
+    """Get the base directory, handling PyInstaller bundling."""
     if getattr(sys, 'frozen', False):
-        # Running in PyInstaller bundle
-        # PyInstaller puts files in a temp folder (_MEIPASS) or next to exe
         if hasattr(sys, '_MEIPASS'):
             return Path(sys._MEIPASS)
-        else:
-            return Path(sys.executable).parent
-    else:
-        # Running in normal Python
-        return Path(__file__).parent
+        return Path(sys.executable).parent
+    return Path(__file__).parent
 
-def find_scripts_dir():
-    """Find the scripts directory in various possible locations"""
+
+def find_scripts_dir() -> Path:
+    """Find the scripts directory."""
     base_dir = get_base_dir()
-    
-    # Possible locations for scripts
-    possible_paths = [
-        base_dir / 'scripts',                           # scripts/ next to exe
-        base_dir / 'windows-deep-cleaner' / 'scripts',  # In subfolder
-        Path(base_dir).parent / 'scripts',              # Parent directory
-        base_dir,                                        # Scripts in same dir
+    candidates = [
+        base_dir / 'scripts',
+        base_dir / 'windows-deep-cleaner' / 'scripts',
+        Path(base_dir).parent / 'scripts',
+        base_dir,
     ]
-    
-    # If PyInstaller, also check _MEIPASS subdirectories
     if hasattr(sys, '_MEIPASS'):
         meipass = Path(sys._MEIPASS)
-        possible_paths.extend([
-            meipass / 'scripts',
-            meipass / 'windows-deep-cleaner' / 'scripts',
-        ])
-    
-    # Check each path
-    for path in possible_paths:
-        if path.exists():
-            # Check if required files exist
-            if (path / 'gui.py').exists():
-                return path
-    
-    # If not found, return the most likely one for error reporting
+        candidates += [meipass / 'scripts', meipass / 'windows-deep-cleaner' / 'scripts']
+
+    for path in candidates:
+        if path.exists() and (path / 'gui.py').exists():
+            return path
+
     return base_dir / 'scripts'
 
-# Get directories
+
 BASE_DIR = get_base_dir()
 SCRIPTS_DIR = find_scripts_dir()
 
-# Debug info (will show in console)
-print(f"Python executable: {sys.executable}")
-print(f"Frozen: {getattr(sys, 'frozen', False)}")
-print(f"_MEIPASS: {getattr(sys, '_MEIPASS', 'N/A')}")
-print(f"Base directory: {BASE_DIR}")
-print(f"Base dir contents: {list(BASE_DIR.iterdir()) if BASE_DIR.exists() else 'N/A'}")
-print(f"Scripts directory: {SCRIPTS_DIR}")
-print(f"Scripts exists: {SCRIPTS_DIR.exists()}")
 
-# If scripts doesn't exist, list what's in base to debug
-if not SCRIPTS_DIR.exists():
-    print(f"\nContents of base directory ({BASE_DIR}):")
-    try:
-        for item in BASE_DIR.iterdir():
-            print(f"  {item.name} {'(dir)' if item.is_dir() else ''}")
-            if item.is_dir():
-                try:
-                    for subitem in item.iterdir():
-                        print(f"    {subitem.name}")
-                except:
-                    pass
-    except Exception as e:
-        print(f"  Error listing: {e}")
-else:
-    print(f"Scripts contents: {list(SCRIPTS_DIR.glob('*.py'))}")
-
-# Function to load module from file
-def load_module_from_file(module_name, file_path):
-    """Load a Python module from a file path"""
-    spec = importlib.util.spec_from_file_location(module_name, file_path)
+def _load_module(name: str, path: Path):
+    """Load a Python module from a file path and register it in sys.modules."""
+    spec = importlib.util.spec_from_file_location(name, path)
     module = importlib.util.module_from_spec(spec)
-    sys.modules[module_name] = module
+    sys.modules[name] = module
     spec.loader.exec_module(module)
     return module
 
-# Try to find scripts in different locations
-def find_script_file(filename):
-    """Find a script file in various locations"""
-    # Direct path
-    direct_path = SCRIPTS_DIR / filename
-    if direct_path.exists():
-        return direct_path
-    
-    # In base directory
-    base_path = BASE_DIR / filename
-    if base_path.exists():
-        return base_path
-    
-    # Search recursively in base
-    for py_file in BASE_DIR.rglob(filename):
-        return py_file
-    
+
+def _find_script(filename: str) -> Path:
+    """Locate a script file relative to SCRIPTS_DIR / BASE_DIR."""
+    for candidate in (SCRIPTS_DIR / filename, BASE_DIR / filename):
+        if candidate.exists():
+            return candidate
+    for match in BASE_DIR.rglob(filename):
+        return match
     return None
 
-# Load all required modules
-try:
-    # Load utils first (needed by cleaner and gui)
-    utils_path = find_script_file('utils.py')
+
+def _load_all_modules():
+    """Load utils, cleaner, and gui modules; raise on failure."""
+    utils_path = _find_script('utils.py')
     if not utils_path:
-        raise FileNotFoundError(f"utils.py not found. Searched in: {SCRIPTS_DIR}, {BASE_DIR}")
-    print(f"Loading utils from: {utils_path}")
-    utils_module = load_module_from_file('utils', utils_path)
-    format_bytes = utils_module.format_bytes
-    
-    # Load cleaner
-    cleaner_path = find_script_file('cleaner.py')
+        raise FileNotFoundError(f"utils.py not found (searched: {SCRIPTS_DIR}, {BASE_DIR})")
+
+    cleaner_path = _find_script('cleaner.py')
     if not cleaner_path:
-        raise FileNotFoundError(f"cleaner.py not found. Searched in: {SCRIPTS_DIR}, {BASE_DIR}")
-    print(f"Loading cleaner from: {cleaner_path}")
-    cleaner_module = load_module_from_file('cleaner', cleaner_path)
-    WindowsCleaner = cleaner_module.WindowsCleaner
-    
-    # Load gui
-    gui_path = find_script_file('gui.py')
+        raise FileNotFoundError(f"cleaner.py not found (searched: {SCRIPTS_DIR}, {BASE_DIR})")
+
+    gui_path = _find_script('gui.py')
     if not gui_path:
-        raise FileNotFoundError(f"gui.py not found. Searched in: {SCRIPTS_DIR}, {BASE_DIR}")
-    print(f"Loading gui from: {gui_path}")
-    
-    # Before loading gui, we need to inject the other modules into sys.modules
-    # so gui.py can find them
-    sys.modules['utils'] = utils_module
-    sys.modules['cleaner'] = cleaner_module
-    
-    gui_module = load_module_from_file('gui', gui_path)
-    CleanerGUI = gui_module.CleanerGUI
-    
-    print("✅ All modules loaded successfully")
-    
-except Exception as e:
-    print(f"❌ Error loading modules: {e}")
-    print(f"Python version: {sys.version}")
-    print(f"Current working directory: {os.getcwd()}")
-    print(f"sys.path: {sys.path}")
-    
-    # Show error dialog if possible
+        raise FileNotFoundError(f"gui.py not found (searched: {SCRIPTS_DIR}, {BASE_DIR})")
+
+    utils_mod = _load_module('utils', utils_path)
+    cleaner_mod = _load_module('cleaner', cleaner_path)
+    # gui.py resolves its own imports via sys.modules, so register first
+    sys.modules['utils'] = utils_mod
+    sys.modules['cleaner'] = cleaner_mod
+    gui_mod = _load_module('gui', gui_path)
+    return gui_mod.CleanerGUI
+
+
+def _show_error_dialog(title: str, message: str):
+    """Display a tkinter error dialog (best-effort)."""
     try:
         import tkinter as tk
         from tkinter import messagebox
         root = tk.Tk()
         root.withdraw()
-        messagebox.showerror(
-            "Import Error",
-            f"Failed to load required modules:\n\n{str(e)}\n\n"
-            f"Base directory: {BASE_DIR}\n"
-            f"Scripts directory: {SCRIPTS_DIR}\n"
-            f"Scripts exists: {SCRIPTS_DIR.exists()}"
-        )
+        messagebox.showerror(title, message)
         root.destroy()
-    except:
+    except Exception:
         pass
-    
-    sys.exit(1)
 
 
-def is_admin():
-    """Check if running with administrator privileges"""
+def is_admin() -> bool:
+    """Return True if the process has administrator privileges."""
     try:
-        return ctypes.windll.shell32.IsUserAnAdmin()
-    except:
+        return bool(ctypes.windll.shell32.IsUserAnAdmin())
+    except Exception:
         return False
 
 
 def main():
-    """Main entry point"""
-    # Check if on Windows
     if sys.platform != 'win32':
-        print("⚠️  This tool is designed for Windows.")
-        print("   Some features may not work on other platforms.")
-    
-    # Check admin status
-    admin = is_admin()
-    if admin:
-        print("✅ Running with administrator privileges")
-    else:
-        print("ℹ️  Running without administrator privileges")
-        print("   Machine-wide cleaning will require elevation")
-    
-    # Launch GUI
+        _show_error_dialog("Unsupported Platform", "Windows Deep Cleaner requires Windows.")
+        sys.exit(1)
+
     try:
-        app = CleanerGUI(admin=admin)
+        CleanerGUI = _load_all_modules()
+    except Exception as exc:
+        _show_error_dialog(
+            "Import Error",
+            f"Failed to load required modules:\n\n{exc}\n\n"
+            f"Base directory: {BASE_DIR}\n"
+            f"Scripts directory: {SCRIPTS_DIR}",
+        )
+        sys.exit(1)
+
+    try:
+        app = CleanerGUI(admin=is_admin())
         app.run()
-    except Exception as e:
-        print(f"❌ Error running GUI: {e}")
+    except Exception as exc:
         import traceback
-        traceback.print_exc()
-        
-        try:
-            import tkinter as tk
-            from tkinter import messagebox
-            root = tk.Tk()
-            root.withdraw()
-            messagebox.showerror("Runtime Error", f"Error running application:\n\n{str(e)}")
-            root.destroy()
-        except:
-            pass
-        
+        _show_error_dialog("Runtime Error", f"Error running application:\n\n{exc}\n\n{traceback.format_exc()}")
         sys.exit(1)
 
 

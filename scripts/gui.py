@@ -13,476 +13,445 @@ import sys
 from pathlib import Path
 
 # Handle imports for both regular Python and PyInstaller
-# First check if modules were pre-loaded (by main.py)
 if 'cleaner' in sys.modules and 'utils' in sys.modules:
-    # Modules were pre-loaded, use them
     WindowsCleaner = sys.modules['cleaner'].WindowsCleaner
     format_bytes = sys.modules['utils'].format_bytes
     get_icon = sys.modules['utils'].get_icon
+    check_disk_space = sys.modules['utils'].check_disk_space
 else:
-    # Try normal imports
     try:
         from cleaner import WindowsCleaner
-        from utils import format_bytes, get_icon
+        from utils import format_bytes, get_icon, check_disk_space
     except ImportError:
-        # If running as script, add parent to path
         sys.path.insert(0, str(Path(__file__).parent))
         from cleaner import WindowsCleaner
-        from utils import format_bytes, get_icon
+        from utils import format_bytes, get_icon, check_disk_space
+
+
+CATEGORY_NAMES = {
+    'temp_files':     '📁 Temporary Files',
+    'browser_cache':  '🌐 Browser Cache',
+    'windows_update': '🔄 Windows Update',
+    'recycle_bin':    '🗑️  Recycle Bin',
+    'thumbnails':     '🖼️  Thumbnails',
+    'crash_dumps':    '💥 Crash Dumps',
+    'log_files':      '📋 Log Files',
+    'downloads':      '📥 Downloads (temp)',
+}
 
 
 class CleanerGUI:
-    """Main GUI application"""
-    
-    def __init__(self, admin=False):
+    """Main GUI application."""
+
+    def __init__(self, admin: bool = False):
         self.admin = admin
         self.cleaner = WindowsCleaner()
-        self.scan_results = {}
-        
+        self.scan_results: dict = {}
+        self._cancel_flag = threading.Event()
+
         self.root = tk.Tk()
         self.root.title("Windows Deep Cleaner")
-        self.root.geometry("1000x850")
+        self.root.geometry("1020x860")
         self.root.minsize(900, 750)
-        
-        # Set Windows DPI awareness
+
         if platform.system() == 'Windows':
             try:
                 from ctypes import windll
                 windll.shcore.SetProcessDpiAwareness(1)
-            except:
+            except Exception:
                 pass
-        
-        self.setup_ui()
-        
-    def setup_ui(self):
-        """Setup the user interface"""
-        # Main container - reduced padding
-        main_frame = ttk.Frame(self.root, padding="10")
-        main_frame.pack(fill=tk.BOTH, expand=True)
-        
-        # Header
-        self._create_header(main_frame)
-        
-        # Mode selection
-        self._create_mode_section(main_frame)
-        
-        # Categories - compact
-        self._create_categories_section(main_frame)
-        
-        # Actions
-        self._create_actions_section(main_frame)
-        
-        # Progress
-        self._create_progress_section(main_frame)
-        
-        # Results - takes remaining space
-        self._create_results_section(main_frame)
-        
-    def _create_header(self, parent):
-        """Create header section"""
-        header = ttk.Frame(parent)
-        header.pack(fill=tk.X, pady=(0, 5))
-        
-        # Title
-        title = ttk.Label(
-            header,
-            text="🧹 Windows Deep Cleaner",
-            font=('Segoe UI', 16, 'bold')
-        )
-        title.pack(anchor=tk.W)
-        
-        # Subtitle
-        subtitle = ttk.Label(
-            header,
-            text="Remove unwanted and unnecessary files to free up disk space",
-            font=('Segoe UI', 9)
-        )
-        subtitle.pack(anchor=tk.W)
-        
-        # Admin status
-        if self.admin:
-            status_text = "✅ Administrator Mode"
-            status_color = 'green'
-        else:
-            status_text = "ℹ️  Standard User Mode"
-            status_color = 'orange'
-            
-        status = ttk.Label(
-            header,
-            text=status_text,
-            font=('Segoe UI', 8, 'bold'),
-            foreground=status_color
-        )
-        status.pack(anchor=tk.W)
-        
+
+        self._build_ui()
+
+    # ------------------------------------------------------------------
+    # UI construction
+    # ------------------------------------------------------------------
+
+    def _build_ui(self):
+        main = ttk.Frame(self.root, padding=10)
+        main.pack(fill=tk.BOTH, expand=True)
+
+        self._build_header(main)
+        self._build_mode_section(main)
+        self._build_categories_section(main)
+        self._build_actions_section(main)
+        self._build_progress_section(main)
+        self._build_results_section(main)
+
+    def _build_header(self, parent):
+        frame = ttk.Frame(parent)
+        frame.pack(fill=tk.X, pady=(0, 5))
+
+        ttk.Label(frame, text="🧹 Windows Deep Cleaner",
+                  font=('Segoe UI', 16, 'bold')).pack(anchor=tk.W)
+        ttk.Label(frame, text="Remove unwanted and unnecessary files to free up disk space",
+                  font=('Segoe UI', 9)).pack(anchor=tk.W)
+
+        status_text = "✅ Administrator Mode" if self.admin else "ℹ️  Standard User Mode"
+        status_color = 'green' if self.admin else 'orange'
+        ttk.Label(frame, text=status_text, font=('Segoe UI', 8, 'bold'),
+                  foreground=status_color).pack(anchor=tk.W)
+
+        # Disk space display
+        self._disk_var = tk.StringVar(value=self._get_disk_summary())
+        ttk.Label(frame, textvariable=self._disk_var,
+                  font=('Segoe UI', 8), foreground='#555').pack(anchor=tk.W)
+
         ttk.Separator(parent, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=5)
-        
-    def _create_mode_section(self, parent):
-        """Create mode selection section"""
-        mode_frame = ttk.LabelFrame(parent, text="Cleaning Mode", padding="5")
-        mode_frame.pack(fill=tk.X, pady=(0, 5))
-        
+
+    def _build_mode_section(self, parent):
+        frame = ttk.LabelFrame(parent, text="Cleaning Mode", padding=5)
+        frame.pack(fill=tk.X, pady=(0, 5))
+
         self.mode_var = tk.StringVar(value='user')
-        
-        ttk.Radiobutton(
-            mode_frame,
-            text="👤 Per-User (Current User)",
-            variable=self.mode_var,
-            value='user',
-            command=self._on_mode_change
-        ).pack(anchor=tk.W)
-        
-        ttk.Radiobutton(
-            mode_frame,
-            text="🖥️  Machine-Wide (All Users - Admin Required)",
-            variable=self.mode_var,
-            value='system',
-            command=self._on_mode_change
-        ).pack(anchor=tk.W)
-            
-    def _create_categories_section(self, parent):
-        """Create cleaning categories section - compact 2-column layout"""
-        cat_frame = ttk.LabelFrame(parent, text="Categories to Clean", padding="5")
-        cat_frame.pack(fill=tk.X, pady=(0, 5))
-        
-        # Create 2-column layout
-        left_frame = ttk.Frame(cat_frame)
-        left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        right_frame = ttk.Frame(cat_frame)
-        right_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        
-        # Create checkboxes for categories
-        self.category_vars = {}
-        self.category_size_labels = {}
-        
-        categories = [
-            ('temp_files', '📁 Temporary Files', 'Temp directories'),
-            ('browser_cache', '🌐 Browser Cache', 'Chrome, Firefox, Edge'),
-            ('windows_update', '🔄 Windows Update', 'Old update files'),
-            ('recycle_bin', '🗑️  Recycle Bin', 'Deleted files'),
+        ttk.Radiobutton(frame, text="👤 Per-User (Current User)",
+                        variable=self.mode_var, value='user',
+                        command=self._on_mode_change).pack(anchor=tk.W)
+        ttk.Radiobutton(frame, text="🖥️  Machine-Wide (All Users - Admin Required)",
+                        variable=self.mode_var, value='system',
+                        command=self._on_mode_change).pack(anchor=tk.W)
+
+    def _build_categories_section(self, parent):
+        outer = ttk.LabelFrame(parent, text="Categories to Clean", padding=5)
+        outer.pack(fill=tk.X, pady=(0, 5))
+
+        # Select All / None buttons
+        btn_row = ttk.Frame(outer)
+        btn_row.pack(fill=tk.X, pady=(0, 3))
+        ttk.Button(btn_row, text="Select All",
+                   command=self._select_all).pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Button(btn_row, text="Select None",
+                   command=self._select_none).pack(side=tk.LEFT)
+
+        left = ttk.Frame(outer)
+        left.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        right = ttk.Frame(outer)
+        right.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        self.category_vars: dict[str, tk.BooleanVar] = {}
+        self.category_size_labels: dict[str, ttk.Label] = {}
+
+        left_cats = [
+            ('temp_files',     '📁 Temporary Files'),
+            ('browser_cache',  '🌐 Browser Cache'),
+            ('windows_update', '🔄 Windows Update'),
+            ('recycle_bin',    '🗑️  Recycle Bin'),
         ]
-        
-        categories_right = [
-            ('thumbnails', '🖼️  Thumbnails', 'Explorer cache'),
-            ('crash_dumps', '💥 Crash Dumps', 'App crash files'),
-            ('log_files', '📋 Log Files', 'System logs'),
-            ('downloads', '📥 Downloads', 'Download folder'),
+        right_cats = [
+            ('thumbnails',  '🖼️  Thumbnails'),
+            ('crash_dumps', '💥 Crash Dumps'),
+            ('log_files',   '📋 Log Files'),
+            ('downloads',   '📥 Downloads (temp)'),
         ]
-        
-        def create_category_row(parent_frame, key, label, description):
-            frame = ttk.Frame(parent_frame)
-            frame.pack(fill=tk.X, pady=1)
-            
+
+        def add_row(col_frame, key, label):
+            row = ttk.Frame(col_frame)
+            row.pack(fill=tk.X, pady=1)
             var = tk.BooleanVar(value=True)
             self.category_vars[key] = var
-            
-            cb = ttk.Checkbutton(frame, text=label, variable=var)
-            cb.pack(side=tk.LEFT)
-            
-            # Size label (will be updated after scan)
-            size_label = ttk.Label(
-                frame,
-                text="",
-                font=('Segoe UI', 8, 'bold'),
-                foreground='green'
-            )
-            size_label.pack(side=tk.RIGHT, padx=(5, 0))
-            self.category_size_labels[key] = size_label
-        
-        # Left column
-        for key, label, desc in categories:
-            create_category_row(left_frame, key, label, desc)
-        
-        # Right column
-        for key, label, desc in categories_right:
-            create_category_row(right_frame, key, label, desc)
-            
-    def _create_actions_section(self, parent):
-        """Create action buttons section"""
-        action_frame = ttk.Frame(parent)
-        action_frame.pack(fill=tk.X, pady=(0, 5))
-        
-        # Scan button
+            ttk.Checkbutton(row, text=label, variable=var).pack(side=tk.LEFT)
+            size_lbl = ttk.Label(row, text="", font=('Segoe UI', 8, 'bold'),
+                                 foreground='green')
+            size_lbl.pack(side=tk.RIGHT, padx=(5, 0))
+            self.category_size_labels[key] = size_lbl
+
+        for key, label in left_cats:
+            add_row(left, key, label)
+        for key, label in right_cats:
+            add_row(right, key, label)
+
+    def _build_actions_section(self, parent):
+        frame = ttk.Frame(parent)
+        frame.pack(fill=tk.X, pady=(0, 5))
+
         self.scan_btn = tk.Button(
-            action_frame,
-            text="🔍 Scan",
-            command=self._scan,
-            bg='#007bff',
-            fg='white',
-            font=('Segoe UI', 10, 'bold'),
-            padx=15,
-            pady=5,
-            cursor='hand2'
-        )
-        self.scan_btn.pack(side=tk.LEFT, padx=(0, 10))
-        
-        # Clean button (disabled until scan)
+            frame, text="🔍 Scan", command=self._scan,
+            bg='#007bff', fg='white', font=('Segoe UI', 10, 'bold'),
+            padx=15, pady=5, cursor='hand2')
+        self.scan_btn.pack(side=tk.LEFT, padx=(0, 8))
+
         self.clean_btn = tk.Button(
-            action_frame,
-            text="🧹 Clean",
-            command=self._clean,
-            bg='#28a745',
-            fg='white',
-            font=('Segoe UI', 10, 'bold'),
-            padx=15,
-            pady=5,
-            cursor='hand2',
-            state=tk.DISABLED
-        )
-        self.clean_btn.pack(side=tk.LEFT, padx=(0, 10))
-        
-        # Dry run checkbox
+            frame, text="🧹 Clean", command=self._clean,
+            bg='#28a745', fg='white', font=('Segoe UI', 10, 'bold'),
+            padx=15, pady=5, cursor='hand2', state=tk.DISABLED)
+        self.clean_btn.pack(side=tk.LEFT, padx=(0, 8))
+
+        self.cancel_btn = tk.Button(
+            frame, text="✖ Cancel", command=self._cancel,
+            bg='#dc3545', fg='white', font=('Segoe UI', 10, 'bold'),
+            padx=15, pady=5, cursor='hand2', state=tk.DISABLED)
+        self.cancel_btn.pack(side=tk.LEFT, padx=(0, 15))
+
         self.dry_run_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(
-            action_frame,
-            text="Dry Run",
-            variable=self.dry_run_var
-        ).pack(side=tk.LEFT, padx=10)
-        
-    def _create_progress_section(self, parent):
-        """Create progress section"""
-        progress_frame = ttk.LabelFrame(parent, text="Progress", padding="5")
-        progress_frame.pack(fill=tk.X, pady=(0, 5))
-        
-        # Progress bar
+        ttk.Checkbutton(frame, text="Dry Run (preview only)",
+                        variable=self.dry_run_var).pack(side=tk.LEFT)
+
+    def _build_progress_section(self, parent):
+        frame = ttk.LabelFrame(parent, text="Progress", padding=5)
+        frame.pack(fill=tk.X, pady=(0, 5))
+
         self.progress_var = tk.DoubleVar(value=0)
-        self.progress = ttk.Progressbar(
-            progress_frame,
-            variable=self.progress_var,
-            maximum=100,
-            mode='determinate'
-        )
-        self.progress.pack(fill=tk.X)
-        
-        # Status label
+        ttk.Progressbar(frame, variable=self.progress_var,
+                        maximum=100, mode='determinate').pack(fill=tk.X)
+
         self.status_var = tk.StringVar(value="Ready to scan")
-        ttk.Label(progress_frame, textvariable=self.status_var, font=('Segoe UI', 8)).pack(anchor=tk.W)
-        
-    def _create_results_section(self, parent):
-        """Create results section - compact but visible"""
-        results_frame = ttk.LabelFrame(parent, text="📊 Results", padding="5")
-        results_frame.pack(fill=tk.BOTH, expand=True)
-        
-        # Summary label at TOP (most important - always visible)
-        self.summary_var = tk.StringVar(value="👉 Click '🔍 Scan' to see what can be cleaned")
-        self.summary_label = ttk.Label(
-            results_frame,
-            textvariable=self.summary_var,
-            font=('Segoe UI', 10, 'bold'),
-            foreground='#007bff'
-        )
-        self.summary_label.pack(anchor=tk.W, pady=(0, 5))
-        
-        # Results text - compact height
+        ttk.Label(frame, textvariable=self.status_var,
+                  font=('Segoe UI', 8)).pack(anchor=tk.W)
+
+    def _build_results_section(self, parent):
+        frame = ttk.LabelFrame(parent, text="📊 Results", padding=5)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        self.summary_var = tk.StringVar(
+            value="👉 Click '🔍 Scan' to see what can be cleaned")
+        ttk.Label(frame, textvariable=self.summary_var,
+                  font=('Segoe UI', 10, 'bold'),
+                  foreground='#007bff').pack(anchor=tk.W, pady=(0, 5))
+
         self.results_text = scrolledtext.ScrolledText(
-            results_frame,
-            wrap=tk.WORD,
-            font=('Consolas', 9),
-            height=10,
-            bg='#f5f5f5'
-        )
+            frame, wrap=tk.WORD, font=('Consolas', 9),
+            height=10, bg='#f5f5f5')
         self.results_text.pack(fill=tk.BOTH, expand=True)
-        
-        # Add initial welcome text
-        self.results_text.insert(tk.END, "Welcome! Select categories above and click Scan.\n")
-        self.results_text.insert(tk.END, "💡 Tip: Use 'Dry Run' first to preview deletions.\n")
+
+        self.results_text.insert(tk.END,
+            "Welcome! Select categories above and click Scan.\n"
+            "💡 Tip: Use 'Dry Run' first to preview deletions.\n")
         self.results_text.config(state=tk.DISABLED)
-        
+
+    # ------------------------------------------------------------------
+    # Event handlers
+    # ------------------------------------------------------------------
+
     def _on_mode_change(self):
-        """Handle mode change"""
-        mode = self.mode_var.get()
-        if mode == 'system' and not self.admin:
+        if self.mode_var.get() == 'system' and not self.admin:
             messagebox.showwarning(
                 "Admin Required",
                 "Machine-Wide mode requires Administrator privileges.\n\n"
-                "Please restart the application as Administrator."
-            )
+                "Please restart the application as Administrator.")
             self.mode_var.set('user')
-            
-    def _log(self, message):
-        """Add message to results"""
+
+    def _select_all(self):
+        for var in self.category_vars.values():
+            var.set(True)
+
+    def _select_none(self):
+        for var in self.category_vars.values():
+            var.set(False)
+
+    def _cancel(self):
+        self._cancel_flag.set()
+        self._set_status("Cancelling...")
+
+    # ------------------------------------------------------------------
+    # Thread-safe GUI update helpers
+    # ------------------------------------------------------------------
+
+    def _after(self, fn, *args):
+        """Schedule fn(*args) on the main thread."""
+        self.root.after(0, fn, *args)
+
+    def _append_log(self, message: str):
+        """Append a line to the log (must be called on main thread)."""
         self.results_text.config(state=tk.NORMAL)
         self.results_text.insert(tk.END, message + "\n")
         self.results_text.see(tk.END)
         self.results_text.config(state=tk.DISABLED)
-        self.status_var.set(message[:80])
-        
+
+    def _set_status(self, message: str):
+        """Update status label (safe to call from any thread via _after)."""
+        self.status_var.set(message[:100])
+
+    def _set_progress(self, value: float):
+        self.progress_var.set(value)
+
+    def _log(self, message: str):
+        """Thread-safe log append."""
+        self._after(self._append_log, message)
+
+    def _update_progress(self, current: int, total: int, message: str):
+        """Progress callback – safe from background threads."""
+        pct = (current / total * 100) if total > 0 else 0
+        self._after(self._set_progress, pct)
+        self._after(self._set_status, message)
+
+    # ------------------------------------------------------------------
+    # Scan
+    # ------------------------------------------------------------------
+
     def _scan(self):
-        """Scan for files to clean"""
-        self.scan_btn.config(state=tk.DISABLED)
-        self.clean_btn.config(state=tk.DISABLED)
-        self.progress_var.set(0)
-        self.results_text.delete(1.0, tk.END)
-        
-        # Clear previous size labels
-        for label in self.category_size_labels.values():
-            label.config(text="")
-        
-        # Get selected categories
         categories = [k for k, v in self.category_vars.items() if v.get()]
-        mode = self.mode_var.get()
-        
         if not categories:
-            messagebox.showwarning("No Categories", "Please select at least one category to scan.")
-            self.scan_btn.config(state=tk.NORMAL)
+            messagebox.showwarning("No Categories",
+                                   "Please select at least one category to scan.")
             return
-            
-        # Run scan in thread
-        thread = threading.Thread(target=self._scan_thread, args=(categories, mode))
-        thread.start()
-        
-    def _scan_thread(self, categories, mode):
-        """Scan thread"""
+
+        self._cancel_flag.clear()
+        self._set_buttons(scanning=True)
+        self._set_progress(0)
+        self._clear_size_labels()
+
+        # Clear log
+        self.results_text.config(state=tk.NORMAL)
+        self.results_text.delete(1.0, tk.END)
+        self.results_text.config(state=tk.DISABLED)
+
+        threading.Thread(
+            target=self._scan_worker,
+            args=(categories, self.mode_var.get()),
+            daemon=True).start()
+
+    def _scan_worker(self, categories: list, mode: str):
         try:
-            # Enable and clear the results text
-            self.results_text.config(state=tk.NORMAL)
-            self.results_text.delete(1.0, tk.END)
-            
             self._log("🔍 Starting scan...")
             self._log(f"   Mode: {mode}")
             self._log(f"   Categories: {', '.join(categories)}")
             self._log("")
-            
+
             results = self.cleaner.scan(categories, mode, self._update_progress)
             self.scan_results = results
-            
-            # Display results in a formatted table
-            total_size = 0
-            total_files = 0
-            
-            self._log("")
-            self._log("="*60)
-            self._log("📊 SCAN RESULTS - Space to be freed per category:")
-            self._log("="*60)
-            self._log("")
-            self._log(f"{'Category':<25} {'Size':>15} {'Files':>10}")
-            self._log("-"*60)
-            
-            # Category display names
-            category_names = {
-                'temp_files': '📁 Temporary Files',
-                'browser_cache': '🌐 Browser Cache',
-                'windows_update': '🔄 Windows Update',
-                'recycle_bin': '🗑️  Recycle Bin',
-                'thumbnails': '🖼️  Thumbnails',
-                'crash_dumps': '💥 Crash Dumps',
-                'log_files': '📋 Log Files',
-                'downloads': '📥 Downloads'
-            }
-            
-            for category, data in results.items():
-                size = data.get('size', 0)
-                files = data.get('files', 0)
-                total_size += size
-                total_files += files
-                
-                display_name = category_names.get(category, category)
-                self._log(f"{display_name:<25} {format_bytes(size):>15} {files:>10}")
-                
-                # Update the category size label in the GUI
-                if category in self.category_size_labels:
-                    if size > 0:
-                        self.category_size_labels[category].config(
-                            text=f"{format_bytes(size)} ({files} files)"
-                        )
-                    else:
-                        self.category_size_labels[category].config(text="")
-                
-            self._log("-"*60)
-            self._log(f"{'TOTAL':<25} {format_bytes(total_size):>15} {total_files:>10}")
-            self._log("="*60)
-            self._log("")
-            
-            self.summary_var.set(f"Scan complete: {format_bytes(total_size)} can be freed")
-            self.clean_btn.config(state=tk.NORMAL)
-            
-        except Exception as e:
-            self._log(f"❌ Error during scan: {e}")
-            messagebox.showerror("Scan Error", str(e))
+
+            total_size = sum(d.get('size', 0) for d in results.values())
+            total_files = sum(d.get('files', 0) for d in results.values())
+
+            self._log("=" * 60)
+            self._log("📊 SCAN RESULTS")
+            self._log("=" * 60)
+            self._log(f"{'Category':<28} {'Size':>12} {'Files':>8}")
+            self._log("-" * 60)
+
+            for cat, data in results.items():
+                s = data.get('size', 0)
+                f = data.get('files', 0)
+                name = CATEGORY_NAMES.get(cat, cat)
+                self._log(f"{name:<28} {format_bytes(s):>12} {f:>8,}")
+
+                # Update size label on main thread
+                if cat in self.category_size_labels:
+                    label_text = f"{format_bytes(s)} ({f:,})" if s > 0 else ""
+                    self._after(
+                        self.category_size_labels[cat].config,
+                        text=label_text)
+
+            self._log("-" * 60)
+            self._log(f"{'TOTAL':<28} {format_bytes(total_size):>12} {total_files:>8,}")
+            self._log("=" * 60)
+
+            summary = f"Scan complete: {format_bytes(total_size)} can be freed ({total_files:,} files)"
+            self._after(self.summary_var.set, summary)
+            self._after(self.clean_btn.config, state=tk.NORMAL)
+
+        except Exception as exc:
+            self._log(f"❌ Error during scan: {exc}")
+            self._after(messagebox.showerror, "Scan Error", str(exc))
         finally:
-            self.scan_btn.config(state=tk.NORMAL)
-            self.progress_var.set(100)
-            
-    def _update_progress(self, current, total, message):
-        """Update progress bar"""
-        if total > 0:
-            self.progress_var.set((current / total) * 100)
-        self._log(message)
-        
+            self._after(self._set_buttons, False)
+            self._after(self._set_progress, 100)
+
+    # ------------------------------------------------------------------
+    # Clean
+    # ------------------------------------------------------------------
+
     def _clean(self):
-        """Clean files"""
         if not self.scan_results:
             messagebox.showwarning("No Scan", "Please scan first before cleaning.")
             return
-            
-        # Confirm
+
         dry_run = self.dry_run_var.get()
-        mode_text = "DRY RUN (preview only)" if dry_run else "PERMANENTLY DELETE"
-        
         if not dry_run:
-            result = messagebox.askyesno(
+            if not messagebox.askyesno(
                 "Confirm Cleaning",
-                f"This will {mode_text} files.\n\n"
-                f"Mode: {self.mode_var.get()}\n"
-                f"Files will be {'previewed only' if dry_run else 'permanently deleted'}.\n\n"
+                f"This will PERMANENTLY DELETE the scanned files.\n\n"
+                f"Mode: {self.mode_var.get()}\n\n"
                 "Are you sure?",
-                icon='warning'
-            )
-            if not result:
+                icon='warning'):
                 return
-                
-        self.scan_btn.config(state=tk.DISABLED)
-        self.clean_btn.config(state=tk.DISABLED)
-        self.progress_var.set(0)
-        
-        # Run clean in thread
-        thread = threading.Thread(target=self._clean_thread, args=(dry_run,))
-        thread.start()
-        
-    def _clean_thread(self, dry_run):
-        """Clean thread"""
+
+        self._cancel_flag.clear()
+        self._set_buttons(scanning=True)
+        self._set_progress(0)
+
+        threading.Thread(
+            target=self._clean_worker,
+            args=(dry_run,),
+            daemon=True).start()
+
+    def _clean_worker(self, dry_run: bool):
         try:
-            if dry_run:
-                self._log("\n🔍 DRY RUN - No files will be deleted\n")
-            else:
-                self._log("\n🧹 Starting cleaning...\n")
-                
+            prefix = "🔍 DRY RUN" if dry_run else "🧹 Cleaning"
+            self._log(f"\n{prefix} – starting...\n")
+
             results = self.cleaner.clean(
                 self.scan_results,
                 dry_run=dry_run,
-                progress_callback=self._update_progress
-            )
-            
-            # Display summary
-            self._log("\n" + "="*60)
+                progress_callback=self._update_progress)
+
+            freed = results.get('total_freed', 0)
+            deleted = results.get('files_deleted', 0)
+            errors = results.get('errors', 0)
+
+            self._log("\n" + "=" * 60)
             if dry_run:
-                self._log("✅ DRY RUN COMPLETE")
-                self._log("   No files were actually deleted")
+                self._log("✅ DRY RUN COMPLETE — no files were deleted")
+                self._log(f"   Would free: {format_bytes(freed)} ({deleted:,} files)")
             else:
                 self._log("✅ CLEANING COMPLETE")
-                self._log(f"   Space freed: {format_bytes(results.get('total_freed', 0))}")
-                self._log(f"   Files deleted: {results.get('files_deleted', 0)}")
-            self._log("="*60)
-            
-            self.summary_var.set("Cleaning complete" if not dry_run else "Dry run complete")
-            
+                self._log(f"   Space freed: {format_bytes(freed)}")
+                self._log(f"   Files deleted: {deleted:,}")
+                if errors:
+                    self._log(f"   Skipped (locked/permission): {errors:,}")
+            self._log("=" * 60)
+
+            summary = ("Dry run complete" if dry_run
+                       else f"Done – freed {format_bytes(freed)} ({deleted:,} files)")
+            self._after(self.summary_var.set, summary)
+
+            # Refresh disk space display
+            self._after(self._disk_var.set, self._get_disk_summary())
+
             if not dry_run:
-                messagebox.showinfo(
+                self._after(
+                    messagebox.showinfo,
                     "Cleaning Complete",
-                    f"Successfully freed {format_bytes(results.get('total_freed', 0))}\n"
-                    f"Files deleted: {results.get('files_deleted', 0)}"
-                )
-                
-        except Exception as e:
-            self._log(f"❌ Error during cleaning: {e}")
-            messagebox.showerror("Cleaning Error", str(e))
+                    f"Freed {format_bytes(freed)}\nFiles deleted: {deleted:,}"
+                    + (f"\nSkipped: {errors:,}" if errors else ""))
+
+        except Exception as exc:
+            self._log(f"❌ Error during cleaning: {exc}")
+            self._after(messagebox.showerror, "Cleaning Error", str(exc))
         finally:
-            self.scan_btn.config(state=tk.NORMAL)
-            self.clean_btn.config(state=tk.NORMAL)
-            self.progress_var.set(100)
-            
+            self._after(self._set_buttons, False)
+            self._after(self._set_progress, 100)
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    def _set_buttons(self, scanning: bool):
+        """Enable/disable buttons for active vs idle state."""
+        idle_state = tk.DISABLED if scanning else tk.NORMAL
+        active_state = tk.NORMAL if scanning else tk.DISABLED
+        self.scan_btn.config(state=idle_state)
+        self.clean_btn.config(
+            state=tk.DISABLED if scanning else
+            (tk.NORMAL if self.scan_results else tk.DISABLED))
+        self.cancel_btn.config(state=active_state)
+
+    def _clear_size_labels(self):
+        for lbl in self.category_size_labels.values():
+            lbl.config(text="")
+
+    def _get_disk_summary(self) -> str:
+        try:
+            space = check_disk_space('C:\\')
+            if 'error' not in space:
+                from utils import format_bytes as _fb
+                return (f"C: drive — {_fb(space['free'])} free of "
+                        f"{_fb(space['total'])} ({space['percent_used']:.1f}% used)")
+        except Exception:
+            pass
+        return ""
+
     def run(self):
-        """Run the GUI"""
         self.root.mainloop()
 
 
